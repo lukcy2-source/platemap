@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全球板塊留言板 - 雲端同步版</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: "Microsoft JhengHei", sans-serif; }
+        #map { height: 100vh; width: 100%; }
+        
+        .header-box {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            text-align: center;
+            min-width: 300px;
+        }
+        
+        .custom-popup { line-height: 1.6; }
+        .custom-popup strong { color: #d35400; font-size: 1.1em; }
+    </style>
+</head>
+<body>
+
+<div class="header-box">
+    <h2 style="margin:0; color:#2c3e50;">🌍 地殼留言板 (雲端版)</h2>
+    <p style="margin:5px 0 0; font-size: 0.9em; color:#7f8c8d;">點擊板塊邊界，你的評論將永久儲存並同步給全班！</p>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+
+<script>
+    // --- 1. Firebase 配置 (已為你替換完成) ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyDD3RepU3OyEzhu9OVyEJnXQkqXs9q3hsQ",
+        authDomain: "geomap-1d09b.firebaseapp.com",
+        databaseURL: "https://geomap-1d09b-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "geomap-1d09b",
+        storageBucket: "geomap-1d09b.firebasestorage.app",
+        messagingSenderId: "618061351875",
+        appId: "1:618061351875:web:cf2ee7e4a19ccd3b7a0b76",
+        measurementId: "G-WWCPHE2JJW"
+    };
+    
+    // 初始化 Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database().ref('global_comments');
+
+    // --- 2. 初始化地圖 ---
+    var map = L.map('map').setView([20, 0], 2);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // 載入全球板塊邊界 GeoJSON
+    fetch('https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json')
+        .then(res => res.json())
+        .then(data => {
+            L.geoJSON(data, {
+                style: { color: "#ff4500", weight: 3, opacity: 0.7 }
+            }).addTo(map);
+        });
+
+    // --- 3. 實時讀取：當資料庫有新留言時，自動在地圖上生成標記 ---
+    db.on('child_added', (snapshot) => {
+        const data = snapshot.val();
+        const marker = L.marker([data.lat, data.lng]).addTo(map);
+        
+        const content = `
+            <div class="custom-popup">
+                <strong>👤 ${data.user}</strong><br>
+                <b>地貌成因：</b><br>${data.text}<br>
+                <small style="color:#bdc3c7;">📅 ${data.time}</small>
+            </div>
+        `;
+        marker.bindPopup(content);
+    });
+
+    // --- 4. 點擊功能：新增留言並存入雲端 ---
+    map.on('click', function(e) {
+        var user = prompt("請輸入你的名字：");
+        if (!user) return;
+
+        var text = prompt("請描述此處的地貌形成過程：");
+        if (!text) return;
+
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
+
+        // 將資料推送到 Firebase
+        db.push({
+            user: user,
+            text: text,
+            lat: lat,
+            lng: lng,
+            time: new Date().toLocaleString()
+        });
+    });
+</script>
+
+</body>
+</html>
